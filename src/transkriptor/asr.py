@@ -6,6 +6,8 @@ from typing import Any, Protocol
 
 
 DEFAULT_MODEL_PATH = "microsoft/VibeVoice-ASR"
+DEFAULT_QUANTIZATION = "none"
+SUPPORTED_QUANTIZATIONS = ("none", "8bit", "4bit", "4bit-nf4", "4bit-fp4")
 
 
 class ASRBackend(Protocol):
@@ -25,6 +27,7 @@ class ASRBackend(Protocol):
 class VibeVoiceASRBackend:
     model_path: str = DEFAULT_MODEL_PATH
     device: str = "auto"
+    quantization: str = DEFAULT_QUANTIZATION
     max_new_tokens: int = 32768
     temperature: float = 0.0
     top_p: float = 1.0
@@ -91,6 +94,7 @@ class VibeVoiceASRBackend:
                 VibeVoiceASRForConditionalGeneration,
             )
             from vibevoice.processor.vibevoice_asr_processor import VibeVoiceASRProcessor
+            from transformers import BitsAndBytesConfig
         except ImportError as exc:
             raise RuntimeError(
                 "VibeVoice-ASR dependencies are not installed. "
@@ -104,7 +108,14 @@ class VibeVoiceASRBackend:
             "attn_implementation": self.attn_implementation,
             "trust_remote_code": True,
         }
-        if self.device == "auto":
+        quantization_config = self._quantization_config(
+            BitsAndBytesConfig,
+            compute_dtype=dtype,
+        )
+        if quantization_config is not None:
+            model_kwargs["quantization_config"] = quantization_config
+            model_kwargs["device_map"] = "auto" if self.device == "auto" else {"": self.device}
+        elif self.device == "auto":
             model_kwargs["device_map"] = "auto"
         elif self.device != "mps":
             model_kwargs["device_map"] = self.device
@@ -114,9 +125,35 @@ class VibeVoiceASRBackend:
             self.model_path,
             **model_kwargs,
         )
-        if self.device != "auto":
+        if self.device != "auto" and quantization_config is None:
             self._model.to(self.device)
         self._model.eval()
+
+    def _quantization_config(
+        self,
+        bitsandbytes_config: Any,
+        *,
+        compute_dtype: Any,
+    ) -> Any | None:
+        quantization = self.quantization.lower()
+        if quantization not in SUPPORTED_QUANTIZATIONS:
+            supported = ", ".join(SUPPORTED_QUANTIZATIONS)
+            raise ValueError(
+                f"unsupported quantization: {self.quantization!r}. "
+                f"Supported values: {supported}"
+            )
+        if quantization == "none":
+            return None
+        if quantization == "8bit":
+            return bitsandbytes_config(load_in_8bit=True)
+
+        quant_type = "nf4" if quantization in {"4bit", "4bit-nf4"} else "fp4"
+        return bitsandbytes_config(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=compute_dtype,
+            bnb_4bit_quant_type=quant_type,
+            bnb_4bit_use_double_quant=True,
+        )
 
     def _dtype(self, torch: Any) -> Any:
         if self.device in {"cpu", "mps", "xpu"}:

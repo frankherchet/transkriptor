@@ -5,7 +5,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .asr import ASRBackend, DEFAULT_MODEL_PATH, VibeVoiceASRBackend
+from .asr import (
+    ASRBackend,
+    DEFAULT_MODEL_PATH,
+    DEFAULT_QUANTIZATION,
+    VibeVoiceASRBackend,
+)
 from .chunks import (
     MAX_UNCHUNKED_SECONDS,
     build_chunk_specs,
@@ -21,6 +26,7 @@ from .normalizer import extract_raw_segments, normalize_segments
 class TranscriptionOptions:
     model_path: str = DEFAULT_MODEL_PATH
     device: str = "auto"
+    quantization: str = DEFAULT_QUANTIZATION
     chunk_markers: str | None = None
     hotwords: list[str] = field(default_factory=list)
     context: str | None = None
@@ -55,6 +61,7 @@ class TranscriptionService:
         backend = self._backend or VibeVoiceASRBackend(
             model_path=options.model_path,
             device=options.device,
+            quantization=options.quantization,
         )
         chunks = build_chunk_specs(markers)
         segments: list[dict[str, Any]] = []
@@ -85,6 +92,7 @@ class TranscriptionService:
             "metadata": {
                 "source_file": source_name(source),
                 "model": backend.model_path,
+                "quantization": options.quantization,
                 "duration_seconds": duration,
                 "chunking": {
                     "enabled": bool(markers),

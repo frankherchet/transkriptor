@@ -12,7 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from .asr import DEFAULT_MODEL_PATH
+from .asr import DEFAULT_MODEL_PATH, DEFAULT_QUANTIZATION, SUPPORTED_QUANTIZATIONS
 from .service import TranscriptionOptions, TranscriptionService
 
 
@@ -88,6 +88,17 @@ def _parse_context(value: str | None) -> str | None:
     return value.strip()
 
 
+def _parse_quantization(value: str) -> str:
+    quantization = value.lower()
+    if quantization not in SUPPORTED_QUANTIZATIONS:
+        supported = ", ".join(SUPPORTED_QUANTIZATIONS)
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported quantization. Supported values: {supported}",
+        )
+    return quantization
+
+
 def _run_job(
     *,
     job_id: str,
@@ -120,6 +131,7 @@ async def create_job(
     context: Annotated[str | None, Form()] = None,
     model_path: Annotated[str, Form()] = DEFAULT_MODEL_PATH,
     device: Annotated[str, Form()] = "auto",
+    quantization: Annotated[str, Form()] = DEFAULT_QUANTIZATION,
 ) -> CreateJobResponse:
     if file.filename is None or not file.filename.lower().endswith(".mp4"):
         raise HTTPException(status_code=400, detail="only .mp4 uploads are supported")
@@ -142,6 +154,7 @@ async def create_job(
     options = TranscriptionOptions(
         model_path=model_path,
         device=device,
+        quantization=_parse_quantization(quantization),
         chunk_markers=chunk_markers,
         hotwords=_parse_hotwords(hotwords),
         context=_parse_context(context),

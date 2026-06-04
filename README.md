@@ -86,6 +86,24 @@ uv run transkriptor input.mp4 -o output.json \
   --device cuda
 ```
 
+Quantization can reduce VRAM usage. Supported values are:
+
+- `none`: default bf16/float32 loading
+- `8bit`: BitsAndBytes 8-bit loading
+- `4bit`: alias for `4bit-nf4`
+- `4bit-nf4`: recommended 4-bit mode for 16 GB VRAM
+- `4bit-fp4`: alternative 4-bit mode
+
+For a 16 GB GPU, start with:
+
+```bash
+uv run transkriptor input.mp4 -o output.json \
+  --device cuda \
+  --quantization 4bit \
+  --chunks 00:26:14,00:45:33,01:06:50 \
+  --context-file video_context.txt
+```
+
 If no chunk markers are provided, the file is processed as one VibeVoice-ASR input. Files longer than 60 minutes produce a warning in the JSON metadata. When chunking is enabled, speaker IDs are namespaced per chunk, for example `chunk2:SPEAKER_00`, because speaker identity is not stitched across chunks.
 
 ## API
@@ -103,6 +121,7 @@ curl -F "file=@input.mp4" \
   -F "chunk_markers=100s,23m,59m" \
   -F "hotwords=Ada Lovelace" \
   -F "context=Moderation: Markus Lanz. Teilnehmer: Karl Lauterbach..." \
+  -F "quantization=4bit" \
   http://127.0.0.1:8000/jobs
 ```
 
@@ -129,6 +148,7 @@ Job state and uploaded files are stored under `.transkriptor_jobs/`. This is loc
     },
     "hotwords": ["Ada Lovelace"],
     "context_provided": true,
+    "quantization": "4bit",
     "warnings": []
   },
   "segments": [
@@ -161,4 +181,5 @@ The tests use a fake ASR backend and do not download or run the VibeVoice model.
 - `ffmpeg` is used to extract audio chunks when `--chunks` or `chunk_markers` is provided.
 - The VibeVoice-ASR backend follows Microsoft demo usage: processor input, model generation, decode, then `post_process_transcription`.
 - `--context`, `--context-file`, and API `context` are passed to VibeVoice-ASR as `context_info` together with hotwords.
+- `--quantization 4bit` uses Transformers `BitsAndBytesConfig` with NF4 and double quantization.
 - The API uses one background worker by default so a single model instance does not receive concurrent long-running jobs in one process.

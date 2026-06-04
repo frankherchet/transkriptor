@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .asr import DEFAULT_MODEL_PATH
+from .asr import DEFAULT_MODEL_PATH, DEFAULT_QUANTIZATION, SUPPORTED_QUANTIZATIONS
 from .service import TranscriptionOptions, TranscriptionService
 
 
@@ -59,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--model-path", default=DEFAULT_MODEL_PATH)
     parser.add_argument("--device", default="auto", choices=("auto", "cuda", "cpu", "mps", "xpu"))
+    parser.add_argument(
+        "--quantization",
+        default=DEFAULT_QUANTIZATION,
+        choices=SUPPORTED_QUANTIZATIONS,
+        help="Model quantization. Use 4bit or 4bit-nf4 for 16 GB VRAM.",
+    )
     return parser
 
 
@@ -68,6 +74,7 @@ def run(args: argparse.Namespace) -> dict:
     options = TranscriptionOptions(
         model_path=args.model_path,
         device=args.device,
+        quantization=args.quantization,
         chunk_markers=args.chunks,
         hotwords=hotwords,
         context=context,

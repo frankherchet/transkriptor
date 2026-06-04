@@ -23,6 +23,7 @@ def test_create_job_and_fetch_result(
                 "warnings": [],
                 "source_file": source.name,
                 "model": options.model_path,
+                "quantization": options.quantization,
                 "chunking": {"enabled": False, "markers_seconds": []},
                 "hotwords": options.hotwords,
                 "context_provided": bool(options.context),
@@ -47,6 +48,7 @@ def test_create_job_and_fetch_result(
                 data={
                     "hotwords": "Ada,Grace",
                     "context": "Moderation: Markus Lanz.",
+                    "quantization": "4bit",
                 },
             )
 
@@ -61,6 +63,7 @@ def test_create_job_and_fetch_result(
             "Grace",
         ]
         assert result.json()["metadata"]["context_provided"] is True
+        assert result.json()["metadata"]["quantization"] == "4bit"
 
     import asyncio
 
