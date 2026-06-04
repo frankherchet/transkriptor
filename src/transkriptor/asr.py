@@ -11,7 +11,13 @@ DEFAULT_MODEL_PATH = "microsoft/VibeVoice-ASR"
 class ASRBackend(Protocol):
     model_path: str
 
-    def transcribe(self, media_path: Path, *, hotwords: list[str]) -> Any:
+    def transcribe(
+        self,
+        media_path: Path,
+        *,
+        hotwords: list[str],
+        context: str | None,
+    ) -> Any:
         pass
 
 
@@ -30,13 +36,19 @@ class VibeVoiceASRBackend:
     _model: Any = None
     _torch: Any = None
 
-    def transcribe(self, media_path: Path, *, hotwords: list[str]) -> dict[str, Any]:
+    def transcribe(
+        self,
+        media_path: Path,
+        *,
+        hotwords: list[str],
+        context: str | None,
+    ) -> dict[str, Any]:
         self._load()
 
         inputs = self._processor(
             audio=str(media_path),
             sampling_rate=None,
-            context_info=self._context_info(hotwords),
+            context_info=self._context_info(hotwords=hotwords, context=context),
             return_tensors="pt",
             add_generation_prompt=True,
         )
@@ -122,6 +134,13 @@ class VibeVoiceASRBackend:
             return "cpu"
 
     @staticmethod
-    def _context_info(hotwords: list[str]) -> str | None:
+    def _context_info(*, hotwords: list[str], context: str | None) -> str | None:
+        parts: list[str] = []
+        if context is not None and context.strip():
+            parts.append(context.strip())
+
         cleaned = [word.strip() for word in hotwords if word.strip()]
-        return ", ".join(cleaned) if cleaned else None
+        if cleaned:
+            parts.append("Hotwords: " + ", ".join(cleaned))
+
+        return "\n\n".join(parts) if parts else None

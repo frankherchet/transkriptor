@@ -55,6 +55,29 @@ uv run transkriptor input.mp4 -o output.json \
   --hotwords-file hotwords.txt
 ```
 
+Longer video metadata can be passed as ASR context. This is useful for names, roles, show metadata, and expected topics:
+
+```bash
+uv run transkriptor input.mp4 -o output.json \
+  --context-file video_context.txt
+```
+
+Example `video_context.txt`:
+
+```text
+Moderation: Markus Lanz.
+
+Teilnehmer:
+Karl Lauterbach, SPD-Politiker
+Marie-Agnes Strack-Zimmermann, FDP-Politikerin
+Robin Alexander, Journalist
+Bernd Raffelhueschen, Oekonom
+
+Themen:
+Sozialpolitik, Gesundheitspolitik, Rentenpolitik, AfD-Abgrenzungsdebatte,
+FDP-Spitze, Kanzlertausch-Debatte.
+```
+
 Device and model can be overridden:
 
 ```bash
@@ -79,6 +102,7 @@ Create a job:
 curl -F "file=@input.mp4" \
   -F "chunk_markers=100s,23m,59m" \
   -F "hotwords=Ada Lovelace" \
+  -F "context=Moderation: Markus Lanz. Teilnehmer: Karl Lauterbach..." \
   http://127.0.0.1:8000/jobs
 ```
 
@@ -104,6 +128,7 @@ Job state and uploaded files are stored under `.transkriptor_jobs/`. This is loc
       "markers_seconds": [100.0, 1380.0, 3540.0]
     },
     "hotwords": ["Ada Lovelace"],
+    "context_provided": true,
     "warnings": []
   },
   "segments": [
@@ -135,4 +160,5 @@ The tests use a fake ASR backend and do not download or run the VibeVoice model.
 - `ffprobe` is used to read source duration.
 - `ffmpeg` is used to extract audio chunks when `--chunks` or `chunk_markers` is provided.
 - The VibeVoice-ASR backend follows Microsoft demo usage: processor input, model generation, decode, then `post_process_transcription`.
+- `--context`, `--context-file`, and API `context` are passed to VibeVoice-ASR as `context_info` together with hotwords.
 - The API uses one background worker by default so a single model instance does not receive concurrent long-running jobs in one process.

@@ -13,10 +13,16 @@ class FakeBackend:
     model_path = "fake-model"
 
     def __init__(self) -> None:
-        self.calls: list[tuple[Path, list[str]]] = []
+        self.calls: list[tuple[Path, list[str], str | None]] = []
 
-    def transcribe(self, media_path: Path, *, hotwords: list[str]) -> list[dict[str, Any]]:
-        self.calls.append((media_path, hotwords))
+    def transcribe(
+        self,
+        media_path: Path,
+        *,
+        hotwords: list[str],
+        context: str | None,
+    ) -> list[dict[str, Any]]:
+        self.calls.append((media_path, hotwords, context))
         return [{"speaker": "SPEAKER_00", "start": 1.0, "end": 2.0, "text": "hello"}]
 
 
@@ -31,10 +37,11 @@ def test_transcribe_file_without_chunking_warns_for_long_media(
     backend = FakeBackend()
     result = TranscriptionService(backend).transcribe_file(
         source,
-        TranscriptionOptions(hotwords=["Ada"]),
+        TranscriptionOptions(hotwords=["Ada"], context="Moderation: Markus Lanz."),
     )
 
-    assert backend.calls == [(source.resolve(), ["Ada"])]
+    assert backend.calls == [(source.resolve(), ["Ada"], "Moderation: Markus Lanz.")]
+    assert result["metadata"]["context_provided"] is True
     assert result["metadata"]["warnings"] == [
         "media is longer than 60 minutes and no chunk markers were provided"
     ]
@@ -64,3 +71,4 @@ def test_transcribe_file_with_chunking_offsets_segments(
     assert [segment["start"] for segment in result["segments"]] == [1.0, 11.0, 21.0]
     assert [segment["id"] for segment in result["segments"]] == [1, 2, 3]
     assert result["metadata"]["chunking"]["markers_seconds"] == [10.0, 20.0]
+    assert result["metadata"]["context_provided"] is False

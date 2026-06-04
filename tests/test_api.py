@@ -25,6 +25,7 @@ def test_create_job_and_fetch_result(
                 "model": options.model_path,
                 "chunking": {"enabled": False, "markers_seconds": []},
                 "hotwords": options.hotwords,
+                "context_provided": bool(options.context),
             },
             "segments": [],
         }
@@ -43,7 +44,10 @@ def test_create_job_and_fetch_result(
             response = await client.post(
                 "/jobs",
                 files={"file": ("input.mp4", b"fake", "video/mp4")},
-                data={"hotwords": "Ada,Grace"},
+                data={
+                    "hotwords": "Ada,Grace",
+                    "context": "Moderation: Markus Lanz.",
+                },
             )
 
             assert response.status_code == 202
@@ -56,6 +60,7 @@ def test_create_job_and_fetch_result(
             "Ada",
             "Grace",
         ]
+        assert result.json()["metadata"]["context_provided"] is True
 
     import asyncio
 

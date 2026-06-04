@@ -18,6 +18,21 @@ def _read_hotwords_file(path: Path | None) -> list[str]:
     ]
 
 
+def _read_context_file(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    return path.read_text(encoding="utf-8").strip()
+
+
+def _combine_context(inline_context: str | None, file_context: str | None) -> str | None:
+    parts = [
+        value.strip()
+        for value in (inline_context, file_context)
+        if value is not None and value.strip()
+    ]
+    return "\n\n".join(parts) if parts else None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="transkriptor",
@@ -33,6 +48,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Hotword/context term. Can be passed multiple times.",
     )
     parser.add_argument("--hotwords-file", type=Path, help="Text file with one hotword per line")
+    parser.add_argument(
+        "--context",
+        help="Free-form video metadata/background information for VibeVoice-ASR.",
+    )
+    parser.add_argument(
+        "--context-file",
+        type=Path,
+        help="UTF-8 text file with video metadata/background information.",
+    )
     parser.add_argument("--model-path", default=DEFAULT_MODEL_PATH)
     parser.add_argument("--device", default="auto", choices=("auto", "cuda", "cpu", "mps", "xpu"))
     return parser
@@ -40,11 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run(args: argparse.Namespace) -> dict:
     hotwords = [*args.hotword, *_read_hotwords_file(args.hotwords_file)]
+    context = _combine_context(args.context, _read_context_file(args.context_file))
     options = TranscriptionOptions(
         model_path=args.model_path,
         device=args.device,
         chunk_markers=args.chunks,
         hotwords=hotwords,
+        context=context,
     )
     result = TranscriptionService().transcribe_file(args.input, options)
     args.output.parent.mkdir(parents=True, exist_ok=True)

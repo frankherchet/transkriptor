@@ -82,6 +82,12 @@ def _parse_hotwords(value: str | None) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
+def _parse_context(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return None
+    return value.strip()
+
+
 def _run_job(
     *,
     job_id: str,
@@ -111,6 +117,7 @@ async def create_job(
     file: Annotated[UploadFile, File()],
     chunk_markers: Annotated[str | None, Form()] = None,
     hotwords: Annotated[str | None, Form()] = None,
+    context: Annotated[str | None, Form()] = None,
     model_path: Annotated[str, Form()] = DEFAULT_MODEL_PATH,
     device: Annotated[str, Form()] = "auto",
 ) -> CreateJobResponse:
@@ -137,6 +144,7 @@ async def create_job(
         device=device,
         chunk_markers=chunk_markers,
         hotwords=_parse_hotwords(hotwords),
+        context=_parse_context(context),
     )
     schedule_job(
         job_id=job_id,

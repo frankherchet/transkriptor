@@ -23,6 +23,7 @@ class TranscriptionOptions:
     device: str = "auto"
     chunk_markers: str | None = None
     hotwords: list[str] = field(default_factory=list)
+    context: str | None = None
 
 
 class TranscriptionService:
@@ -66,7 +67,11 @@ class TranscriptionService:
                     media_path = temp_path / f"chunk-{spec.index:04d}.wav"
                     extract_chunk(source, media_path, spec)
 
-                raw_result = backend.transcribe(media_path, hotwords=options.hotwords)
+                raw_result = backend.transcribe(
+                    media_path,
+                    hotwords=options.hotwords,
+                    context=options.context,
+                )
                 raw_segments = extract_raw_segments(raw_result)
                 normalized = normalize_segments(
                     raw_segments,
@@ -86,6 +91,7 @@ class TranscriptionService:
                     "markers_seconds": markers,
                 },
                 "hotwords": options.hotwords,
+                "context_provided": bool(options.context and options.context.strip()),
                 "warnings": warnings,
             },
             "segments": segments,
