@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from .asr import DEFAULT_MODEL_PATH, DEFAULT_QUANTIZATION, SUPPORTED_QUANTIZATIONS
-from .service import TranscriptionOptions, TranscriptionService
+from .service import ChunkProgress, TranscriptionOptions, TranscriptionService
 
 
 def _read_hotwords_file(path: Path | None) -> list[str]:
@@ -31,6 +32,27 @@ def _combine_context(inline_context: str | None, file_context: str | None) -> st
         if value is not None and value.strip()
     ]
     return "\n\n".join(parts) if parts else None
+
+
+def _partial_output_path(output: Path) -> Path:
+    return output.with_name(output.name + ".partial")
+
+
+def _format_time(seconds: float | None) -> str:
+    if seconds is None:
+        return "end"
+    rounded = int(round(seconds))
+    hours, remainder = divmod(rounded, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def _write_json(path: Path, result: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -79,12 +101,38 @@ def run(args: argparse.Namespace) -> dict:
         hotwords=hotwords,
         context=context,
     )
-    result = TranscriptionService().transcribe_file(args.input, options)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    partial_output = _partial_output_path(args.output)
+
+    def on_chunk_start(progress: ChunkProgress) -> None:
+        print(
+            "Transcribing chunk "
+            f"{progress.chunk_index + 1}/{progress.total_chunks}: "
+            f"{_format_time(progress.start)}-{_format_time(progress.end)}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def on_chunk_complete(progress: ChunkProgress) -> None:
+        if progress.result is None:
+            return
+        _write_json(partial_output, progress.result)
+        print(
+            "Finished chunk "
+            f"{progress.chunk_index + 1}/{progress.total_chunks}; "
+            f"wrote partial result to {partial_output}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    result = TranscriptionService().transcribe_file(
+        args.input,
+        options,
+        on_chunk_start=on_chunk_start,
+        on_chunk_complete=on_chunk_complete,
     )
+    _write_json(args.output, result)
+    if partial_output.exists():
+        partial_output.unlink()
     return result
 
 

@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 import transkriptor.service as service_module
-from transkriptor.service import TranscriptionOptions, TranscriptionService
+from transkriptor.service import ChunkProgress, TranscriptionOptions, TranscriptionService
 
 
 class FakeBackend:
@@ -72,3 +72,36 @@ def test_transcribe_file_with_chunking_offsets_segments(
     assert [segment["id"] for segment in result["segments"]] == [1, 2, 3]
     assert result["metadata"]["chunking"]["markers_seconds"] == [10.0, 20.0]
     assert result["metadata"]["context_provided"] is False
+
+
+def test_transcribe_file_reports_chunk_progress(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "input.mp4"
+    source.write_bytes(b"fake")
+    monkeypatch.setattr(service_module, "probe_duration_seconds", lambda path: 30.0)
+    monkeypatch.setattr(
+        service_module,
+        "extract_chunk",
+        lambda source_path, destination, spec: destination.write_bytes(b"chunk"),
+    )
+
+    starts: list[ChunkProgress] = []
+    completes: list[ChunkProgress] = []
+
+    TranscriptionService(FakeBackend()).transcribe_file(
+        source,
+        TranscriptionOptions(chunk_markers="10s,20s"),
+        on_chunk_start=starts.append,
+        on_chunk_complete=completes.append,
+    )
+
+    assert [(item.chunk_index, item.total_chunks, item.start, item.end) for item in starts] == [
+        (0, 3, 0.0, 10.0),
+        (1, 3, 10.0, 20.0),
+        (2, 3, 20.0, None),
+    ]
+    assert [item.segments_done for item in completes] == [1, 2, 3]
+    assert completes[-1].result is not None
+    assert len(completes[-1].result["segments"]) == 3

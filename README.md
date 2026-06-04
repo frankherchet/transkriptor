@@ -40,6 +40,15 @@ Basic transcription:
 uv run transkriptor input.mp4 -o output.json
 ```
 
+The CLI prints progress for each chunk to stderr:
+
+```text
+Transcribing chunk 1/4: 00:00:00-00:26:14
+Finished chunk 1/4; wrote partial result to output.json.partial
+```
+
+After every completed chunk, a partial JSON result is written next to the final output as `output.json.partial`. The final `output.json` is written only after the full run succeeds, and the partial file is removed at the end. If the process is interrupted or runs out of memory, keep the `.partial` file as the latest completed chunk result.
+
 Optional chunk markers are absolute cut points in the source timeline. Supported formats include seconds, minutes, hours, and clock values:
 
 ```bash

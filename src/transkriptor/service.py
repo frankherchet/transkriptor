@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .asr import (
     ASRBackend,
@@ -32,6 +32,16 @@ class TranscriptionOptions:
     context: str | None = None
 
 
+@dataclass(frozen=True)
+class ChunkProgress:
+    chunk_index: int
+    total_chunks: int
+    start: float
+    end: float | None
+    segments_done: int
+    result: dict[str, Any] | None = None
+
+
 class TranscriptionService:
     def __init__(self, backend: ASRBackend | None = None) -> None:
         self._backend = backend
@@ -40,6 +50,8 @@ class TranscriptionService:
         self,
         source: Path,
         options: TranscriptionOptions | None = None,
+        on_chunk_start: Callable[[ChunkProgress], None] | None = None,
+        on_chunk_complete: Callable[[ChunkProgress], None] | None = None,
     ) -> dict[str, Any]:
         options = options or TranscriptionOptions()
         source = source.expanduser().resolve()
@@ -65,10 +77,30 @@ class TranscriptionService:
         )
         chunks = build_chunk_specs(markers)
         segments: list[dict[str, Any]] = []
+        result = self._build_result(
+            source=source,
+            backend=backend,
+            options=options,
+            duration=duration,
+            markers=markers,
+            warnings=warnings,
+            segments=segments,
+        )
 
         with tempfile.TemporaryDirectory(prefix="transkriptor-") as temp_dir:
             temp_path = Path(temp_dir)
             for spec in chunks:
+                if on_chunk_start is not None:
+                    on_chunk_start(
+                        ChunkProgress(
+                            chunk_index=spec.index,
+                            total_chunks=len(chunks),
+                            start=spec.start,
+                            end=spec.end,
+                            segments_done=len(segments),
+                        )
+                    )
+
                 media_path = source
                 if markers:
                     media_path = temp_path / f"chunk-{spec.index:04d}.wav"
@@ -87,7 +119,40 @@ class TranscriptionService:
                     first_id=len(segments) + 1,
                 )
                 segments.extend(normalized)
+                result = self._build_result(
+                    source=source,
+                    backend=backend,
+                    options=options,
+                    duration=duration,
+                    markers=markers,
+                    warnings=warnings,
+                    segments=segments,
+                )
+                if on_chunk_complete is not None:
+                    on_chunk_complete(
+                        ChunkProgress(
+                            chunk_index=spec.index,
+                            total_chunks=len(chunks),
+                            start=spec.start,
+                            end=spec.end,
+                            segments_done=len(segments),
+                            result=result,
+                        )
+                    )
 
+        return result
+
+    def _build_result(
+        self,
+        *,
+        source: Path,
+        backend: ASRBackend,
+        options: TranscriptionOptions,
+        duration: float | None,
+        markers: list[float],
+        warnings: list[str],
+        segments: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         return {
             "metadata": {
                 "source_file": source_name(source),
@@ -102,5 +167,5 @@ class TranscriptionService:
                 "context_provided": bool(options.context and options.context.strip()),
                 "warnings": warnings,
             },
-            "segments": segments,
+            "segments": list(segments),
         }
