@@ -104,6 +104,44 @@ uv run transkriptor input.mp4 -o output.json \
   --context-file video_context.txt
 ```
 
+## Model cache
+
+VibeVoice-ASR is downloaded through Hugging Face Hub. By default, model files are cached under:
+
+```text
+~/.cache/huggingface/hub
+```
+
+For the default model, expect files below:
+
+```text
+~/.cache/huggingface/hub/models--microsoft--VibeVoice-ASR
+```
+
+Check cache size:
+
+```bash
+du -sh ~/.cache/huggingface/hub/models--microsoft--VibeVoice-ASR
+```
+
+Move the Hugging Face cache by setting `HF_HOME`:
+
+```bash
+HF_HOME=/data/hf-cache uv run transkriptor input.mp4 \
+  -o output.json \
+  --quantization 4bit
+```
+
+Or set only the Hub cache:
+
+```bash
+HF_HUB_CACHE=/data/hf-cache/hub uv run transkriptor input.mp4 \
+  -o output.json \
+  --quantization 4bit
+```
+
+`--quantization 4bit` reduces GPU memory during model loading/inference, but it still downloads the original model safetensors first. Quantization happens locally while loading the model.
+
 If no chunk markers are provided, the file is processed as one VibeVoice-ASR input. Files longer than 60 minutes produce a warning in the JSON metadata. When chunking is enabled, speaker IDs are namespaced per chunk, for example `chunk2:SPEAKER_00`, because speaker identity is not stitched across chunks.
 
 ## API
